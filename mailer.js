@@ -1,57 +1,21 @@
-var Response = require('./app/models/response.js').Response
-  , sendConfirmationEmail = require('./confirmation-mailer.js').sendConfirmationEmail
-  , sendStartupEmail = require('./confirmation-mailer.js').sendStartupEmail;
+var mailgun = require('mailgun-js')({apiKey: "key-0427e9f62f466535f9d41e5f8d45184f", domain: "nuisepic.com"})
+  , mustache = require('mustache')
 
-function sendUpdateEmails () {
-  Response.find({receivedConfirmationEmail: { $exists: false } }, function(err, responses) {
-    if (err) console.log(err);
-
-    console.log(responses);
-
-    responses.forEach(function(response) {
-      // TEST -- remove before production run
-      sendConfirmationEmail({
-        user: {
-          name: {
-            first: response.raw.name.first,
-            last: response.raw.name.last,
-            full: response.raw.name.first + " " + response.raw.name.last
-          },
-          email: response.raw.email
-        },
-        account: {
-          setupLink: "http://epic-talent-portal.herokuapp.com/register?email=" + response.raw.email + "&id=" + response._id,
-          loginLink: "http://epic-talent-portal.herokuapp.com/#/login",
-          alreadyApplied: false
-        }
-      }, function(success) {
-        response.receivedConfirmationEmail = true;
-        response.markModified('receivedConfirmationEmail');
-        response.save(function() {
-          console.log('Update sent and field set on ' + response.raw.email);
-        });
-      }, function(failure) {});
-    });
-  });
+module.exports.RENDERING_ENGINE = {
+  handlebars : 'handlebars',
+  jade       : 'pug',
+  pug        : 'pug'
 }
 
-function sendStartupEmails () {
-  var startups = require('./config/startups-masterlist.js');
+/// Options: object containing template, variables, engine
+module.exports = function (data, options) {
+  var renderer = require(options.engine)
 
-  startups.forEach(function(startupArray) {
-    sendStartupEmail({
-      startup: {
-        name: startupArray[1],
-        email: startupArray[0],
-        registrationLink: 'http://epic-talent-portal.herokuapp.com/register?email=' + startupArray[0] + '&special=reg_startup22619'
-      }
-    }, function (success) {
-      console.log('Successfully send startup registration email to ' + startupArray[1] + ' <' + startupArray[0] + '>');
-    }, function (failure) {});
+  data.html = renderer.render(options.template, options.variables)
+
+  mailgun.messages().send(data, function (error, body) {
+    console.error(error)
+    console.log(body)
   })
-
-  console.log('Done sending startup emails');
 }
 
-module.exports.sendUpdateEmails = sendUpdateEmails;
-module.exports.sendStartupEmails = sendStartupEmails;
